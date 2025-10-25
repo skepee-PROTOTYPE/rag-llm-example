@@ -24,10 +24,19 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Initialize OpenAI client for GitHub Models
-client = OpenAI(
-    base_url="https://models.inference.ai.azure.com",
-    api_key=os.environ.get("GITHUB_TOKEN")
-)
+def get_openai_client():
+    """Get OpenAI client with GitHub Models configuration"""
+    api_key = os.environ.get("GITHUB_TOKEN")
+    if not api_key:
+        logger.error("GITHUB_TOKEN environment variable not set")
+        raise ValueError("GITHUB_TOKEN not configured")
+    
+    logger.info(f"Initializing OpenAI client with token: {api_key[:10]}...")
+    return OpenAI(
+        base_url="https://models.inference.ai.azure.com",
+        api_key=api_key,
+        timeout=30.0  # 30 second timeout
+    )
 
 # Global storage for document chunks
 document_chunks = []
@@ -98,17 +107,22 @@ Question: {question}
 
 Answer:"""
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that answers questions based on provided context."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=500
-    )
-    
-    return response.choices[0].message.content
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers questions based on provided context."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error calling OpenAI API: {str(e)}", exc_info=True)
+        raise
 
 
 # Initialize documents on startup
@@ -137,6 +151,19 @@ def health_check():
         "status": "healthy",
         "service": "RAG API",
         "chunks_loaded": len(document_chunks)
+    })
+
+
+@app.route("/debug", methods=["GET"])
+def debug_info():
+    """Debug endpoint to check configuration."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    return jsonify({
+        "token_configured": bool(token),
+        "token_length": len(token) if token else 0,
+        "token_preview": token[:10] + "..." if len(token) > 10 else "",
+        "chunks_loaded": len(document_chunks),
+        "base_url": "https://models.inference.ai.azure.com"
     })
 
 
