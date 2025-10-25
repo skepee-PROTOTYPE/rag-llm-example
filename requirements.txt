@@ -6,6 +6,10 @@ langchain-openai>=0.0.5
 chromadb>=0.4.22
 python-dotenv>=1.0.0
 
+# Web framework for API
+flask>=3.0.0
+gunicorn>=21.2.0
+
 # Document processing
 pypdf>=4.0.0
 tiktoken>=0.5.2
